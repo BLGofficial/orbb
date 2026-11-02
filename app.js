@@ -1,77 +1,8 @@
-"use strict";
-(() => {
-  // src/orb/orbState.ts
-  var ORB_STATES = ["idle", "listening", "thinking", "speaking", "analysing", "rendering"];
-  var STATE_TARGETS = {
-    idle: { energy: 0.45, spin: 0.12, turbulence: 0.3, flow: 0.15, reactivity: 0.15, scan: 0, arc: 0 },
-    listening: { energy: 0.6, spin: 0.18, turbulence: 0.35, flow: -0.8, reactivity: 0.9, scan: 0, arc: 0 },
-    thinking: { energy: 0.7, spin: 0.55, turbulence: 0.75, flow: 0.05, reactivity: 0.1, scan: 0, arc: 0 },
-    speaking: { energy: 0.75, spin: 0.22, turbulence: 0.45, flow: 0.9, reactivity: 1, scan: 0, arc: 0 },
-    analysing: { energy: 0.65, spin: 0.3, turbulence: 0.4, flow: 0.2, reactivity: 0, scan: 1, arc: 0 },
-    rendering: { energy: 0.8, spin: 0.4, turbulence: 0.5, flow: 0.6, reactivity: 0, scan: 0, arc: 1 }
-  };
-  var clamp01 = (x) => Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0;
-  var smooth = (current, target, dt, tau) => (
-    // lerp form: exact at dt=0 (the target-offset form drifts by 1 ulp)
-    current + (target - current) * (1 - Math.exp(-dt / tau))
-  );
-  var smoothParams = (cur, tgt, dt, tau) => ({
-    energy: smooth(cur.energy, tgt.energy, dt, tau),
-    spin: smooth(cur.spin, tgt.spin, dt, tau),
-    turbulence: smooth(cur.turbulence, tgt.turbulence, dt, tau),
-    flow: smooth(cur.flow, tgt.flow, dt, tau),
-    reactivity: smooth(cur.reactivity, tgt.reactivity, dt, tau),
-    scan: smooth(cur.scan, tgt.scan, dt, tau),
-    arc: smooth(cur.arc, tgt.arc, dt, tau)
-  });
-  var envelope = (prev, input, dt, attack = 0.025, release = 0.22) => {
-    const x = clamp01(input);
-    return smooth(prev, x, dt, x > prev ? attack : release);
-  };
-  var clampDt = (dt) => Math.min(0.1, Math.max(0, dt));
-  var QUALITY_SCALES = [1, 0.85, 0.7, 0.55];
-  var SLOW_MS = 22;
-  var FAST_MS = 18;
-  var SLOW_SPAN_MS = 500;
-  var SLOW_MIN_FRAMES = 8;
-  var FAST_FRAMES = 240;
-  var MAX_BACKOFF = 16;
-  var initialQuality = () => ({
-    step: 0,
-    scale: QUALITY_SCALES[0],
-    slow: 0,
-    slowMs: 0,
-    fast: 0,
-    drops: 0
-  });
-  var nextQuality = (q, frameMs) => {
-    const isSlow = frameMs > SLOW_MS;
-    const slow = isSlow ? q.slow + 1 : 0;
-    const slowMs = isSlow ? q.slowMs + frameMs : 0;
-    const fast = frameMs < FAST_MS ? q.fast + 1 : 0;
-    const last = QUALITY_SCALES.length - 1;
-    if (slow >= SLOW_MIN_FRAMES && slowMs >= SLOW_SPAN_MS && q.step < last) {
-      const step = q.step + 1;
-      return { step, scale: QUALITY_SCALES[step], slow: 0, slowMs: 0, fast: 0, drops: q.drops + 1 };
-    }
-    const needed = FAST_FRAMES * Math.min(MAX_BACKOFF, 2 ** Math.max(0, q.drops - 1));
-    if (fast >= needed && q.step > 0) {
-      const step = q.step - 1;
-      return { step, scale: QUALITY_SCALES[step], slow: 0, slowMs: 0, fast: 0, drops: q.drops };
-    }
-    return { ...q, slow, slowMs, fast };
-  };
-
-  // src/orb/shaders.ts
-  var HEADER = (
-    /* glsl */
-    `#version 300 es
+"use strict";(()=>{var Re,v,mt,Mn,Z,pt,ht,Be,We,$e,ze,Un,ue={},vt=[],Dn=/acit|ex(?:s|g|n|p|$)|rph|grid|ows|mnc|ntw|ine[ch]|zoo|^ord|itera/i,ke=Array.isArray;function K(e,t){for(var n in t)e[n]=t[n];return e}function gt(e){e&&e.parentNode&&e.parentNode.removeChild(e)}function pe(e,t,n){var r,o,s,l={};for(s in t)s=="key"?r=t[s]:s=="ref"?o=t[s]:l[s]=t[s];if(arguments.length>2&&(l.children=arguments.length>3?Re.call(arguments,2):n),typeof e=="function"&&e.defaultProps!=null)for(s in e.defaultProps)l[s]===void 0&&(l[s]=e.defaultProps[s]);return Ee(e,l,r,o,null)}function Ee(e,t,n,r,o){var s={type:e,props:t,key:n,ref:r,__k:null,__:null,__b:0,__e:null,__d:void 0,__c:null,constructor:void 0,__v:o??++mt,__i:-1,__u:0};return o==null&&v.vnode!=null&&v.vnode(s),s}function U(e){return e.children}function $(e,t){this.props=e,this.context=t}function oe(e,t){if(t==null)return e.__?oe(e.__,e.__i+1):null;for(var n;t<e.__k.length;t++)if((n=e.__k[t])!=null&&n.__e!=null)return n.__e;return typeof e.type=="function"?oe(e):null}function yt(e){var t,n;if((e=e.__)!=null&&e.__c!=null){for(e.__e=e.__c.base=null,t=0;t<e.__k.length;t++)if((n=e.__k[t])!=null&&n.__e!=null){e.__e=e.__c.base=n.__e;break}return yt(e)}}function ft(e){(!e.__d&&(e.__d=!0)&&Z.push(e)&&!we.__r++||pt!==v.debounceRendering)&&((pt=v.debounceRendering)||ht)(we)}function we(){var e,t,n,r,o,s,l,a;for(Z.sort(Be);e=Z.shift();)e.__d&&(t=Z.length,r=void 0,s=(o=(n=e).__v).__e,l=[],a=[],n.__P&&((r=K({},o)).__v=o.__v+1,v.vnode&&v.vnode(r),Ge(n.__P,r,o,n.__n,n.__P.namespaceURI,32&o.__u?[s]:null,l,s??oe(o),!!(32&o.__u),a),r.__v=o.__v,r.__.__k[r.__i]=r,St(l,r,a),r.__e!=s&&yt(r)),Z.length>t&&Z.sort(Be));we.__r=0}function bt(e,t,n,r,o,s,l,a,u,c,_){var i,m,d,h,x,S=r&&r.__k||vt,y=t.length;for(n.__d=u,Fn(n,t,S),u=n.__d,i=0;i<y;i++)(d=n.__k[i])!=null&&(m=d.__i===-1?ue:S[d.__i]||ue,d.__i=i,Ge(e,d,m,o,s,l,a,u,c,_),h=d.__e,d.ref&&m.ref!=d.ref&&(m.ref&&qe(m.ref,null,d),_.push(d.ref,d.__c||h,d)),x==null&&h!=null&&(x=h),65536&d.__u||m.__k===d.__k?u=xt(d,u,e):typeof d.type=="function"&&d.__d!==void 0?u=d.__d:h&&(u=h.nextSibling),d.__d=void 0,d.__u&=-196609);n.__d=u,n.__e=x}function Fn(e,t,n){var r,o,s,l,a,u=t.length,c=n.length,_=c,i=0;for(e.__k=[],r=0;r<u;r++)(o=t[r])!=null&&typeof o!="boolean"&&typeof o!="function"?(l=r+i,(o=e.__k[r]=typeof o=="string"||typeof o=="number"||typeof o=="bigint"||o.constructor==String?Ee(null,o,null,null,null):ke(o)?Ee(U,{children:o},null,null,null):o.constructor===void 0&&o.__b>0?Ee(o.type,o.props,o.key,o.ref?o.ref:null,o.__v):o).__=e,o.__b=e.__b+1,s=null,(a=o.__i=Hn(o,n,l,_))!==-1&&(_--,(s=n[a])&&(s.__u|=131072)),s==null||s.__v===null?(a==-1&&i--,typeof o.type!="function"&&(o.__u|=65536)):a!==l&&(a==l-1?i--:a==l+1?i++:(a>l?i--:i++,o.__u|=65536))):o=e.__k[r]=null;if(_)for(r=0;r<c;r++)(s=n[r])!=null&&!(131072&s.__u)&&(s.__e==e.__d&&(e.__d=oe(s)),Et(s,s))}function xt(e,t,n){var r,o;if(typeof e.type=="function"){for(r=e.__k,o=0;r&&o<r.length;o++)r[o]&&(r[o].__=e,t=xt(r[o],t,n));return t}e.__e!=t&&(t&&e.type&&!n.contains(t)&&(t=oe(e)),n.insertBefore(e.__e,t||null),t=e.__e);do t=t&&t.nextSibling;while(t!=null&&t.nodeType===8);return t}function fe(e,t){return t=t||[],e==null||typeof e=="boolean"||(ke(e)?e.some(function(n){fe(n,t)}):t.push(e)),t}function Hn(e,t,n,r){var o=e.key,s=e.type,l=n-1,a=n+1,u=t[n];if(u===null||u&&o==u.key&&s===u.type&&!(131072&u.__u))return n;if(r>(u!=null&&!(131072&u.__u)?1:0))for(;l>=0||a<t.length;){if(l>=0){if((u=t[l])&&!(131072&u.__u)&&o==u.key&&s===u.type)return l;l--}if(a<t.length){if((u=t[a])&&!(131072&u.__u)&&o==u.key&&s===u.type)return a;a++}}return-1}function _t(e,t,n){t[0]==="-"?e.setProperty(t,n??""):e[t]=n==null?"":typeof n!="number"||Dn.test(t)?n:n+"px"}function Se(e,t,n,r,o){var s;e:if(t==="style")if(typeof n=="string")e.style.cssText=n;else{if(typeof r=="string"&&(e.style.cssText=r=""),r)for(t in r)n&&t in n||_t(e.style,t,"");if(n)for(t in n)r&&n[t]===r[t]||_t(e.style,t,n[t])}else if(t[0]==="o"&&t[1]==="n")s=t!==(t=t.replace(/(PointerCapture)$|Capture$/i,"$1")),t=t.toLowerCase()in e||t==="onFocusOut"||t==="onFocusIn"?t.toLowerCase().slice(2):t.slice(2),e.l||(e.l={}),e.l[t+s]=n,n?r?n.u=r.u:(n.u=We,e.addEventListener(t,s?ze:$e,s)):e.removeEventListener(t,s?ze:$e,s);else{if(o=="http://www.w3.org/2000/svg")t=t.replace(/xlink(H|:h)/,"h").replace(/sName$/,"s");else if(t!="width"&&t!="height"&&t!="href"&&t!="list"&&t!="form"&&t!="tabIndex"&&t!="download"&&t!="rowSpan"&&t!="colSpan"&&t!="role"&&t!="popover"&&t in e)try{e[t]=n??"";break e}catch{}typeof n=="function"||(n==null||n===!1&&t[4]!=="-"?e.removeAttribute(t):e.setAttribute(t,t=="popover"&&n==1?"":n))}}function dt(e){return function(t){if(this.l){var n=this.l[t.type+e];if(t.t==null)t.t=We++;else if(t.t<n.u)return;return n(v.event?v.event(t):t)}}}function Ge(e,t,n,r,o,s,l,a,u,c){var _,i,m,d,h,x,S,y,b,P,f,C,V,F,I,B,A=t.type;if(t.constructor!==void 0)return null;128&n.__u&&(u=!!(32&n.__u),s=[a=t.__e=n.__e]),(_=v.__b)&&_(t);e:if(typeof A=="function")try{if(y=t.props,b="prototype"in A&&A.prototype.render,P=(_=A.contextType)&&r[_.__c],f=_?P?P.props.value:_.__:r,n.__c?S=(i=t.__c=n.__c).__=i.__E:(b?t.__c=i=new A(y,f):(t.__c=i=new $(y,f),i.constructor=A,i.render=Bn),P&&P.sub(i),i.props=y,i.state||(i.state={}),i.context=f,i.__n=r,m=i.__d=!0,i.__h=[],i._sb=[]),b&&i.__s==null&&(i.__s=i.state),b&&A.getDerivedStateFromProps!=null&&(i.__s==i.state&&(i.__s=K({},i.__s)),K(i.__s,A.getDerivedStateFromProps(y,i.__s))),d=i.props,h=i.state,i.__v=t,m)b&&A.getDerivedStateFromProps==null&&i.componentWillMount!=null&&i.componentWillMount(),b&&i.componentDidMount!=null&&i.__h.push(i.componentDidMount);else{if(b&&A.getDerivedStateFromProps==null&&y!==d&&i.componentWillReceiveProps!=null&&i.componentWillReceiveProps(y,f),!i.__e&&(i.shouldComponentUpdate!=null&&i.shouldComponentUpdate(y,i.__s,f)===!1||t.__v===n.__v)){for(t.__v!==n.__v&&(i.props=y,i.state=i.__s,i.__d=!1),t.__e=n.__e,t.__k=n.__k,t.__k.some(function(T){T&&(T.__=t)}),C=0;C<i._sb.length;C++)i.__h.push(i._sb[C]);i._sb=[],i.__h.length&&l.push(i);break e}i.componentWillUpdate!=null&&i.componentWillUpdate(y,i.__s,f),b&&i.componentDidUpdate!=null&&i.__h.push(function(){i.componentDidUpdate(d,h,x)})}if(i.context=f,i.props=y,i.__P=e,i.__e=!1,V=v.__r,F=0,b){for(i.state=i.__s,i.__d=!1,V&&V(t),_=i.render(i.props,i.state,i.context),I=0;I<i._sb.length;I++)i.__h.push(i._sb[I]);i._sb=[]}else do i.__d=!1,V&&V(t),_=i.render(i.props,i.state,i.context),i.state=i.__s;while(i.__d&&++F<25);i.state=i.__s,i.getChildContext!=null&&(r=K(K({},r),i.getChildContext())),b&&!m&&i.getSnapshotBeforeUpdate!=null&&(x=i.getSnapshotBeforeUpdate(d,h)),bt(e,ke(B=_!=null&&_.type===U&&_.key==null?_.props.children:_)?B:[B],t,n,r,o,s,l,a,u,c),i.base=t.__e,t.__u&=-161,i.__h.length&&l.push(i),S&&(i.__E=i.__=null)}catch(T){if(t.__v=null,u||s!=null){for(t.__u|=u?160:128;a&&a.nodeType===8&&a.nextSibling;)a=a.nextSibling;s[s.indexOf(a)]=null,t.__e=a}else t.__e=n.__e,t.__k=n.__k;v.__e(T,t,n)}else s==null&&t.__v===n.__v?(t.__k=n.__k,t.__e=n.__e):t.__e=Vn(n.__e,t,n,r,o,s,l,u,c);(_=v.diffed)&&_(t)}function St(e,t,n){t.__d=void 0;for(var r=0;r<n.length;r++)qe(n[r],n[++r],n[++r]);v.__c&&v.__c(t,e),e.some(function(o){try{e=o.__h,o.__h=[],e.some(function(s){s.call(o)})}catch(s){v.__e(s,o.__v)}})}function Vn(e,t,n,r,o,s,l,a,u){var c,_,i,m,d,h,x,S=n.props,y=t.props,b=t.type;if(b==="svg"?o="http://www.w3.org/2000/svg":b==="math"?o="http://www.w3.org/1998/Math/MathML":o||(o="http://www.w3.org/1999/xhtml"),s!=null){for(c=0;c<s.length;c++)if((d=s[c])&&"setAttribute"in d==!!b&&(b?d.localName===b:d.nodeType===3)){e=d,s[c]=null;break}}if(e==null){if(b===null)return document.createTextNode(y);e=document.createElementNS(o,b,y.is&&y),a&&(v.__m&&v.__m(t,s),a=!1),s=null}if(b===null)S===y||a&&e.data===y||(e.data=y);else{if(s=s&&Re.call(e.childNodes),S=n.props||ue,!a&&s!=null)for(S={},c=0;c<e.attributes.length;c++)S[(d=e.attributes[c]).name]=d.value;for(c in S)if(d=S[c],c!="children"){if(c=="dangerouslySetInnerHTML")i=d;else if(!(c in y)){if(c=="value"&&"defaultValue"in y||c=="checked"&&"defaultChecked"in y)continue;Se(e,c,null,d,o)}}for(c in y)d=y[c],c=="children"?m=d:c=="dangerouslySetInnerHTML"?_=d:c=="value"?h=d:c=="checked"?x=d:a&&typeof d!="function"||S[c]===d||Se(e,c,d,S[c],o);if(_)a||i&&(_.__html===i.__html||_.__html===e.innerHTML)||(e.innerHTML=_.__html),t.__k=[];else if(i&&(e.innerHTML=""),bt(e,ke(m)?m:[m],t,n,r,b==="foreignObject"?"http://www.w3.org/1999/xhtml":o,s,l,s?s[0]:n.__k&&oe(n,0),a,u),s!=null)for(c=s.length;c--;)gt(s[c]);a||(c="value",b==="progress"&&h==null?e.removeAttribute("value"):h!==void 0&&(h!==e[c]||b==="progress"&&!h||b==="option"&&h!==S[c])&&Se(e,c,h,S[c],o),c="checked",x!==void 0&&x!==e[c]&&Se(e,c,x,S[c],o))}return e}function qe(e,t,n){try{if(typeof e=="function"){var r=typeof e.__u=="function";r&&e.__u(),r&&t==null||(e.__u=e(t))}else e.current=t}catch(o){v.__e(o,n)}}function Et(e,t,n){var r,o;if(v.unmount&&v.unmount(e),(r=e.ref)&&(r.current&&r.current!==e.__e||qe(r,null,t)),(r=e.__c)!=null){if(r.componentWillUnmount)try{r.componentWillUnmount()}catch(s){v.__e(s,t)}r.base=r.__P=null}if(r=e.__k)for(o=0;o<r.length;o++)r[o]&&Et(r[o],t,n||typeof e.type!="function");n||gt(e.__e),e.__c=e.__=e.__e=e.__d=void 0}function Bn(e,t,n){return this.constructor(e,n)}function Xe(e,t,n){var r,o,s,l;v.__&&v.__(e,t),o=(r=typeof n=="function")?null:n&&n.__k||t.__k,s=[],l=[],Ge(t,e=(!r&&n||t).__k=pe(U,null,[e]),o||ue,ue,t.namespaceURI,!r&&n?[n]:o?null:t.firstChild?Re.call(t.childNodes):null,s,!r&&n?n:o?o.__e:t.firstChild,r,l),St(s,e,l)}Re=vt.slice,v={__e:function(e,t,n,r){for(var o,s,l;t=t.__;)if((o=t.__c)&&!o.__)try{if((s=o.constructor)&&s.getDerivedStateFromError!=null&&(o.setState(s.getDerivedStateFromError(e)),l=o.__d),o.componentDidCatch!=null&&(o.componentDidCatch(e,r||{}),l=o.__d),l)return o.__E=o}catch(a){e=a}throw e}},mt=0,Mn=function(e){return e!=null&&e.constructor==null},$.prototype.setState=function(e,t){var n;n=this.__s!=null&&this.__s!==this.state?this.__s:this.__s=K({},this.state),typeof e=="function"&&(e=e(K({},n),this.props)),e&&K(n,e),e!=null&&this.__v&&(t&&this._sb.push(t),ft(this))},$.prototype.forceUpdate=function(e){this.__v&&(this.__e=!0,e&&this.__h.push(e),ft(this))},$.prototype.render=U,Z=[],ht=typeof Promise=="function"?Promise.prototype.then.bind(Promise.resolve()):setTimeout,Be=function(e,t){return e.__v.__b-t.__v.__b},we.__r=0,We=0,$e=dt(!1),ze=dt(!0),Un=0;var se,R,Ye,wt,_e=0,Ot=[],k=v,Rt=k.__b,kt=k.__r,Pt=k.diffed,Tt=k.__c,Lt=k.unmount,Ct=k.__;function Te(e,t){k.__h&&k.__h(R,e,_e||t),_e=0;var n=R.__H||(R.__H={__:[],__h:[]});return e>=n.__.length&&n.__.push({}),n.__[e]}function N(e){return _e=1,Le(It,e)}function Le(e,t,n){var r=Te(se++,2);if(r.t=e,!r.__c&&(r.__=[n?n(t):It(void 0,t),function(a){var u=r.__N?r.__N[0]:r.__[0],c=r.t(u,a);u!==c&&(r.__N=[c,r.__[1]],r.__c.setState({}))}],r.__c=R,!R.u)){var o=function(a,u,c){if(!r.__c.__H)return!0;var _=r.__c.__H.__.filter(function(m){return!!m.__c});if(_.every(function(m){return!m.__N}))return!s||s.call(this,a,u,c);var i=!1;return _.forEach(function(m){if(m.__N){var d=m.__[0];m.__=m.__N,m.__N=void 0,d!==m.__[0]&&(i=!0)}}),!(!i&&r.__c.props===a)&&(!s||s.call(this,a,u,c))};R.u=!0;var s=R.shouldComponentUpdate,l=R.componentWillUpdate;R.componentWillUpdate=function(a,u,c){if(this.__e){var _=s;s=void 0,o(a,u,c),s=_}l&&l.call(this,a,u,c)},R.shouldComponentUpdate=o}return r.__N||r.__}function H(e,t){var n=Te(se++,3);!k.__s&&Qe(n.__H,t)&&(n.__=e,n.i=t,R.__H.__h.push(n))}function Nt(e,t){var n=Te(se++,4);!k.__s&&Qe(n.__H,t)&&(n.__=e,n.i=t,R.__h.push(n))}function D(e){return _e=5,je(function(){return{current:e}},[])}function je(e,t){var n=Te(se++,7);return Qe(n.__H,t)&&(n.__=e(),n.__H=t,n.__h=e),n.__}function Ce(e,t){return _e=8,je(function(){return e},t)}function $n(){for(var e;e=Ot.shift();)if(e.__P&&e.__H)try{e.__H.__h.forEach(Pe),e.__H.__h.forEach(Ke),e.__H.__h=[]}catch(t){e.__H.__h=[],k.__e(t,e.__v)}}k.__b=function(e){R=null,Rt&&Rt(e)},k.__=function(e,t){e&&t.__k&&t.__k.__m&&(e.__m=t.__k.__m),Ct&&Ct(e,t)},k.__r=function(e){kt&&kt(e),se=0;var t=(R=e.__c).__H;t&&(Ye===R?(t.__h=[],R.__h=[],t.__.forEach(function(n){n.__N&&(n.__=n.__N),n.i=n.__N=void 0})):(t.__h.forEach(Pe),t.__h.forEach(Ke),t.__h=[],se=0)),Ye=R},k.diffed=function(e){Pt&&Pt(e);var t=e.__c;t&&t.__H&&(t.__H.__h.length&&(Ot.push(t)!==1&&wt===k.requestAnimationFrame||((wt=k.requestAnimationFrame)||zn)($n)),t.__H.__.forEach(function(n){n.i&&(n.__H=n.i),n.i=void 0})),Ye=R=null},k.__c=function(e,t){t.some(function(n){try{n.__h.forEach(Pe),n.__h=n.__h.filter(function(r){return!r.__||Ke(r)})}catch(r){t.some(function(o){o.__h&&(o.__h=[])}),t=[],k.__e(r,n.__v)}}),Tt&&Tt(e,t)},k.unmount=function(e){Lt&&Lt(e);var t,n=e.__c;n&&n.__H&&(n.__H.__.forEach(function(r){try{Pe(r)}catch(o){t=o}}),n.__H=void 0,t&&k.__e(t,n.__v))};var At=typeof requestAnimationFrame=="function";function zn(e){var t,n=function(){clearTimeout(r),At&&cancelAnimationFrame(t),setTimeout(e)},r=setTimeout(n,100);At&&(t=requestAnimationFrame(n))}function Pe(e){var t=R,n=e.__c;typeof n=="function"&&(e.__c=void 0,n()),R=t}function Ke(e){var t=R;e.__c=e.__(),R=t}function Qe(e,t){return!e||e.length!==t.length||t.some(function(n,r){return n!==e[r]})}function It(e,t){return typeof t=="function"?t(e):t}function Mt(e,t){for(var n in e)if(n!=="__source"&&!(n in t))return!0;for(var r in t)if(r!=="__source"&&e[r]!==t[r])return!0;return!1}function Ut(e,t){this.props=e,this.context=t}(Ut.prototype=new $).isPureReactComponent=!0,Ut.prototype.shouldComponentUpdate=function(e,t){return Mt(this.props,e)||Mt(this.state,t)};var Dt=v.__b;v.__b=function(e){e.type&&e.type.__f&&e.ref&&(e.props.ref=e.ref,e.ref=null),Dt&&Dt(e)};var Vr=typeof Symbol<"u"&&Symbol.for&&Symbol.for("react.forward_ref")||3911;var qn=v.__e;v.__e=function(e,t,n,r){if(e.then){for(var o,s=t;s=s.__;)if((o=s.__c)&&o.__c)return t.__e==null&&(t.__e=n.__e,t.__k=n.__k),o.__c(e,t)}qn(e,t,n,r)};var Ft=v.unmount;function Wt(e,t,n){return e&&(e.__c&&e.__c.__H&&(e.__c.__H.__.forEach(function(r){typeof r.__c=="function"&&r.__c()}),e.__c.__H=null),(e=function(r,o){for(var s in o)r[s]=o[s];return r}({},e)).__c!=null&&(e.__c.__P===n&&(e.__c.__P=t),e.__c=null),e.__k=e.__k&&e.__k.map(function(r){return Wt(r,t,n)})),e}function Gt(e,t,n){return e&&n&&(e.__v=null,e.__k=e.__k&&e.__k.map(function(r){return Gt(r,t,n)}),e.__c&&e.__c.__P===t&&(e.__e&&n.appendChild(e.__e),e.__c.__e=!0,e.__c.__P=n)),e}function Je(){this.__u=0,this.t=null,this.__b=null}function qt(e){var t=e.__.__c;return t&&t.__a&&t.__a(e)}function Ae(){this.u=null,this.o=null}v.unmount=function(e){var t=e.__c;t&&t.__R&&t.__R(),t&&32&e.__u&&(e.type=null),Ft&&Ft(e)},(Je.prototype=new $).__c=function(e,t){var n=t.__c,r=this;r.t==null&&(r.t=[]),r.t.push(n);var o=qt(r.__v),s=!1,l=function(){s||(s=!0,n.__R=null,o?o(a):a())};n.__R=l;var a=function(){if(!--r.__u){if(r.state.__a){var u=r.state.__a;r.__v.__k[0]=Gt(u,u.__c.__P,u.__c.__O)}var c;for(r.setState({__a:r.__b=null});c=r.t.pop();)c.forceUpdate()}};r.__u++||32&t.__u||r.setState({__a:r.__b=r.__v.__k[0]}),e.then(l,l)},Je.prototype.componentWillUnmount=function(){this.t=[]},Je.prototype.render=function(e,t){if(this.__b){if(this.__v.__k){var n=document.createElement("div"),r=this.__v.__k[0].__c;this.__v.__k[0]=Wt(this.__b,n,r.__O=r.__P)}this.__b=null}var o=t.__a&&pe(U,null,e.fallback);return o&&(o.__u&=-33),[pe(U,null,t.__a?null:e.children),o]};var Ht=function(e,t,n){if(++n[1]===n[0]&&e.o.delete(t),e.props.revealOrder&&(e.props.revealOrder[0]!=="t"||!e.o.size))for(n=e.u;n;){for(;n.length>3;)n.pop()();if(n[1]<n[0])break;e.u=n=n[2]}};(Ae.prototype=new $).__a=function(e){var t=this,n=qt(t.__v),r=t.o.get(e);return r[0]++,function(o){var s=function(){t.props.revealOrder?(r.push(o),Ht(t,e,r)):o()};n?n(s):s()}},Ae.prototype.render=function(e){this.u=null,this.o=new Map;var t=fe(e.children);e.revealOrder&&e.revealOrder[0]==="b"&&t.reverse();for(var n=t.length;n--;)this.o.set(t[n],this.u=[1,0,this.u]);return e.children},Ae.prototype.componentDidUpdate=Ae.prototype.componentDidMount=function(){var e=this;this.o.forEach(function(t,n){Ht(e,n,t)})};var Xn=typeof Symbol<"u"&&Symbol.for&&Symbol.for("react.element")||60103,Yn=/^(?:accent|alignment|arabic|baseline|cap|clip(?!PathU)|color|dominant|fill|flood|font|glyph(?!R)|horiz|image(!S)|letter|lighting|marker(?!H|W|U)|overline|paint|pointer|shape|stop|strikethrough|stroke|text(?!L)|transform|underline|unicode|units|v|vector|vert|word|writing|x(?!C))[A-Z]/,Kn=/^on(Ani|Tra|Tou|BeforeInp|Compo)/,jn=/[A-Z0-9]/g,Qn=typeof document<"u",Jn=function(e){return(typeof Symbol<"u"&&typeof Symbol()=="symbol"?/fil|che|rad/:/fil|che|ra/).test(e)};function Xt(e,t,n){return t.__k==null&&(t.textContent=""),Xe(e,t),typeof n=="function"&&n(),e?e.__c:null}$.prototype.isReactComponent={},["componentWillMount","componentWillReceiveProps","componentWillUpdate"].forEach(function(e){Object.defineProperty($.prototype,e,{configurable:!0,get:function(){return this["UNSAFE_"+e]},set:function(t){Object.defineProperty(this,e,{configurable:!0,writable:!0,value:t})}})});var Vt=v.event;function Zn(){}function er(){return this.cancelBubble}function tr(){return this.defaultPrevented}v.event=function(e){return Vt&&(e=Vt(e)),e.persist=Zn,e.isPropagationStopped=er,e.isDefaultPrevented=tr,e.nativeEvent=e};var Yt,nr={enumerable:!1,configurable:!0,get:function(){return this.class}},Bt=v.vnode;v.vnode=function(e){typeof e.type=="string"&&function(t){var n=t.props,r=t.type,o={},s=r.indexOf("-")===-1;for(var l in n){var a=n[l];if(!(l==="value"&&"defaultValue"in n&&a==null||Qn&&l==="children"&&r==="noscript"||l==="class"||l==="className")){var u=l.toLowerCase();l==="defaultValue"&&"value"in n&&n.value==null?l="value":l==="download"&&a===!0?a="":u==="translate"&&a==="no"?a=!1:u[0]==="o"&&u[1]==="n"?u==="ondoubleclick"?l="ondblclick":u!=="onchange"||r!=="input"&&r!=="textarea"||Jn(n.type)?u==="onfocus"?l="onfocusin":u==="onblur"?l="onfocusout":Kn.test(l)&&(l=u):u=l="oninput":s&&Yn.test(l)?l=l.replace(jn,"-$&").toLowerCase():a===null&&(a=void 0),u==="oninput"&&o[l=u]&&(l="oninputCapture"),o[l]=a}}r=="select"&&o.multiple&&Array.isArray(o.value)&&(o.value=fe(n.children).forEach(function(c){c.props.selected=o.value.indexOf(c.props.value)!=-1})),r=="select"&&o.defaultValue!=null&&(o.value=fe(n.children).forEach(function(c){c.props.selected=o.multiple?o.defaultValue.indexOf(c.props.value)!=-1:o.defaultValue==c.props.value})),n.class&&!n.className?(o.class=n.class,Object.defineProperty(o,"className",nr)):(n.className&&!n.class||n.class&&n.className)&&(o.class=o.className=n.className),t.props=o}(e),e.$$typeof=Xn,Bt&&Bt(e)};var $t=v.__r;v.__r=function(e){$t&&$t(e),Yt=e.__c};var zt=v.diffed;v.diffed=function(e){zt&&zt(e);var t=e.props,n=e.__e;n!=null&&e.type==="textarea"&&"value"in t&&t.value!==n.value&&(n.value=t.value==null?"":t.value),Yt=null};function Kt(e){return!!e.__k&&(Xe(null,e),!0)}function jt(e,t){var n=t(),r=N({h:{__:n,v:t}}),o=r[0].h,s=r[1];return Nt(function(){o.__=n,o.v=t,Ze(o)&&s({h:o})},[e,n,t]),H(function(){return Ze(o)&&s({h:o}),e(function(){Ze(o)&&s({h:o})})},[e]),n}function Ze(e){var t,n,r=e.v,o=e.__;try{var s=r();return!((t=o)===(n=s)&&(t!==0||1/t==1/n)||t!=t&&n!=n)}catch{return!0}}function Qt(e){return{render:function(t){Xt(t,e)},unmount:function(){Kt(e)}}}var Jt=e=>{let t="",n=[],r=()=>{n.length&&e(n.join(`
+`)),n=[]},o=s=>{let l=s.endsWith("\r")?s.slice(0,-1):s;if(l==="")return r();l.startsWith(":")||l.startsWith("data:")&&n.push(l.slice(l[5]===" "?6:5))};return{push(s){t+=s;let l;for(;(l=t.indexOf(`
+`))>=0;)o(t.slice(0,l)),t=t.slice(l+1)},end(){t&&o(t),t="",r()}}};var Oe=e=>e.replace(/\/+$/,""),Zt=e=>({"x-api-key":e,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"}),rr=(e,t)=>{let n=e.system.trim(),r={"content-type":"application/json"};if(e.kind==="anthropic")return{url:`${Oe(e.baseUrl)}/v1/messages`,method:"POST",headers:{...r,...Zt(e.key)},body:JSON.stringify({model:e.model,max_tokens:1024,stream:!0,...n?{system:n}:{},messages:t})};if(e.kind==="gemini"){let o=e.model.replace(/^models\//,"");return{url:`${Oe(e.baseUrl)}/v1beta/models/${encodeURIComponent(o)}:streamGenerateContent?alt=sse`,method:"POST",headers:{...r,"x-goog-api-key":e.key},body:JSON.stringify({contents:t.map(s=>({role:s.role==="assistant"?"model":"user",parts:[{text:s.content}]})),...n?{systemInstruction:{parts:[{text:n}]}}:{}})}}return{url:`${Oe(e.baseUrl)}/chat/completions`,method:"POST",headers:{...r,Authorization:`Bearer ${e.key}`},body:JSON.stringify({model:e.model,stream:!0,messages:n?[{role:"system",content:n},...t]:t})}},or=(e,t)=>{if(t==="[DONE]")return null;let n;try{n=JSON.parse(t)}catch{return""}if(n?.error)throw new Error(n.error.message??String(n.error));if(e==="anthropic"){if(n.type==="error")throw new Error(n.error?.message??"Stream error");return n.type==="message_stop"?null:n.type==="content_block_delta"&&n.delta?.type==="text_delta"?n.delta.text:""}return e==="gemini"?(n.candidates?.[0]?.content?.parts??[]).map(o=>o.text??"").join(""):n.choices?.[0]?.delta?.content??""},sr=e=>{let t=Oe(e.baseUrl);return e.kind==="anthropic"?{url:`${t}/v1/models?limit=100`,method:"GET",headers:Zt(e.key),body:""}:e.kind==="gemini"?{url:`${t}/v1beta/models?pageSize=1000`,method:"GET",headers:{"x-goog-api-key":e.key},body:""}:{url:`${t}/models`,method:"GET",headers:{Authorization:`Bearer ${e.key}`},body:""}},ar=(e,t)=>e==="gemini"?(Array.isArray(t?.models)?t.models:[]).filter(o=>(o.supportedGenerationMethods??[]).includes("generateContent")).map(o=>String(o.name).replace(/^models\//,"")).sort():(Array.isArray(t?.data)?t.data:[]).map(r=>String(r.id)).sort(),z=class extends Error{constructor(n,r){super(`HTTP ${n}`);this.status=n;this.body=r}};async function*en(e,t,n){let r=rr(e,t),o;try{o=await fetch(r.url,{method:r.method,headers:r.headers,body:r.body,signal:n})}catch(_){throw _.name==="AbortError"?_:new z(0,String(_))}if(!o.ok||!o.body)throw new z(o.status,await o.text().catch(()=>""));let s=o.body.getReader(),l=new TextDecoder,a=[],u=!1,c=Jt(_=>a.push(_));try{for(;!u;){let _=await s.read();for(_.done?c.end():c.push(l.decode(_.value,{stream:!0}));a.length;){let i=or(e.kind,a.shift());if(i===null){u=!0;break}i&&(yield i)}if(_.done)break}}finally{s.cancel().catch(()=>{})}}var tn=async e=>{let t=sr(e),n;try{n=await fetch(t.url,{method:"GET",headers:t.headers})}catch(r){throw new z(0,String(r))}if(!n.ok)throw new z(n.status,await n.text().catch(()=>""));return ar(e.kind,await n.json())};var ir=e=>{try{let t=JSON.parse(e),n=t?.error?.message??t?.message??t?.[0]?.error?.message;if(n)return String(n)}catch{}return e.trim()},ae=e=>{let{status:t,provider:n}=e,r=t===0?`Couldn't reach ${n}. You're offline, or it blocks browser requests (CORS).`:t===401||t===403?`API key rejected by ${n}. Check it in Settings.`:t===429?`${n}: rate limited or out of credit. Wait, or check your plan.`:t===404?`${n}: model or endpoint not found (404). Check the model / base URL in Settings.`:t>=500?`${n} is having problems (${t}). Try again.`:`${n} returned ${t}.`,o=t===0?"":ir(e.body),s=o?`${r} ${o}`:r;return s.length>240?`${s.slice(0,237)}...`:s};var et={d:"M91 149.5L91 82L251 82L333 0L9 0L9 183.47L246.78 421.25L82 586.03L82 476.97L130 428.97L130 313L0 443L0 784L362.75 421.25L250.23 308.73L405.5 153.47L560.77 308.73L448.25 421.25L811 784L811 443L681 313L681 428.97L729 476.97L729 586.03L564.22 421.25L802 183.47L802 0L478 0L560 82L720 82L720 149.5L618.75 250.75L405.5 37.5L192.25 250.75Z",width:811,height:784};var Ie={idle:{energy:.45,spin:.12,turbulence:.3,flow:.15,reactivity:.15,scan:0,arc:0},listening:{energy:.6,spin:.18,turbulence:.35,flow:-.8,reactivity:.9,scan:0,arc:0},thinking:{energy:.7,spin:.55,turbulence:.75,flow:.05,reactivity:.1,scan:0,arc:0},speaking:{energy:.75,spin:.22,turbulence:.45,flow:.9,reactivity:1,scan:0,arc:0},analysing:{energy:.65,spin:.3,turbulence:.4,flow:.2,reactivity:0,scan:1,arc:0},rendering:{energy:.8,spin:.4,turbulence:.5,flow:.6,reactivity:0,scan:0,arc:1}},lr=e=>Number.isFinite(e)?Math.min(1,Math.max(0,e)):0,q=(e,t,n,r)=>e+(t-e)*(1-Math.exp(-n/r)),nn=(e,t,n,r)=>({energy:q(e.energy,t.energy,n,r),spin:q(e.spin,t.spin,n,r),turbulence:q(e.turbulence,t.turbulence,n,r),flow:q(e.flow,t.flow,n,r),reactivity:q(e.reactivity,t.reactivity,n,r),scan:q(e.scan,t.scan,n,r),arc:q(e.arc,t.arc,n,r)}),rn=(e,t,n,r=.025,o=.22)=>{let s=lr(t);return q(e,s,n,s>e?r:o)},on=e=>Math.min(.1,Math.max(0,e)),Ne=[1,.85,.7,.55],cr=22,ur=18,pr=500,fr=8,_r=240,dr=16,sn=()=>({step:0,scale:Ne[0],slow:0,slowMs:0,fast:0,drops:0}),an=(e,t)=>{let n=t>cr,r=n?e.slow+1:0,o=n?e.slowMs+t:0,s=t<ur?e.fast+1:0,l=Ne.length-1;if(r>=fr&&o>=pr&&e.step<l){let u=e.step+1;return{step:u,scale:Ne[u],slow:0,slowMs:0,fast:0,drops:e.drops+1}}let a=_r*Math.min(dr,2**Math.max(0,e.drops-1));if(s>=a&&e.step>0){let u=e.step-1;return{step:u,scale:Ne[u],slow:0,slowMs:0,fast:0,drops:e.drops}}return{...e,slow:r,slowMs:o,fast:s}};var j=`#version 300 es
 precision highp float;
-`
-  );
-  var NOISE = (
-    /* glsl */
-    `
+`,ln=`
 float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float hash13(vec3 p3){ p3 = fract(p3 * .1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec3 p){
@@ -86,22 +17,14 @@ mat3 rotX(float a){ float c = cos(a), s = sin(a); return mat3(1,0,0, 0,c,s, 0,-s
 vec3 goldTone(float L){ return 1. - exp(-L * vec3(1.0, 0.64, 0.26) * 1.7); }
 // 1 inside, 0 at the canvas border: small embeds fade out instead of clipping against their box.
 float edgeFade(vec2 fc, vec2 res){ vec2 m = min(fc, res - fc); return smoothstep(0., .1 * min(res.x, res.y), min(m.x, m.y)); }
-`
-  );
-  var FULLSCREEN_VS = (
-    /* glsl */
-    `${HEADER}
+`,cn=`${j}
 void main(){
   vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
   gl_Position = vec4(p * 2. - 1., 0., 1.);
-}`
-  );
-  var BACKGROUND_FS = (
-    /* glsl */
-    `${HEADER}
+}`,un=`${j}
 uniform vec2 uRes; uniform float uR, uPx, uTime, uFlowPhase, uEnergy, uTransparent;
 out vec4 o;
-${NOISE}
+${ln}
 void main(){
   vec2 p = gl_FragCoord.xy - .5 * uRes;
   float r = length(p) / uR;
@@ -123,24 +46,16 @@ void main(){
   col += vec3(.022, .017, .012) * vig * (1. - uTransparent);
   col += (hash12(gl_FragCoord.xy + fract(uTime) * 61.) - .5) / 255.;   // dither: kills banding in the dark gradient
   o = vec4(max(col, 0.), uTransparent > .5 ? max(col.r, max(col.g, col.b)) : 1.);
-}`
-  );
-  var ORB_VS = (
-    /* glsl */
-    `${HEADER}
+}`,pn=`${j}
 uniform vec2 uRes; uniform float uHalf;
 void main(){
   vec2 c = vec2(gl_VertexID & 1, gl_VertexID >> 1) * 2. - 1.;
   gl_Position = vec4(c * uHalf / (uRes * .5), 0., 1.);
-}`
-  );
-  var ORB_FS = (
-    /* glsl */
-    `${HEADER}
+}`,fn=`${j}
 uniform vec2 uRes;
 uniform float uR, uPx, uTime, uRot, uEnergy, uTurb, uLevel, uScan, uScanPhase, uArc, uProgress;
 out vec4 o;
-${NOISE}
+${ln}
 // Contour lines of warped fbm at constant on-screen width (fwidth), which reads as thin energy filaments.
 float filaments(vec3 q, float count, out float glow){
   float v = fbm3(q) * count;
@@ -205,11 +120,7 @@ void main(){
   L *= (1. - smoothstep(1.22, 1.42, r)) * edgeFade(gl_FragCoord.xy, uRes);                                // reach zero inside the quad: no square seam
   vec3 col = goldTone(L);
   o = vec4(col, max(col.r, max(col.g, col.b)));                        // additive pass; alpha only matters when transparent
-}`
-  );
-  var PARTICLE_VS = (
-    /* glsl */
-    `${HEADER}
+}`,_n=`${j}
 uniform vec2 uRes;
 uniform float uR, uPx, uTime, uRot, uFlowPhase, uEnergy, uLevel;
 out vec3 vCol; out float vA;
@@ -251,11 +162,7 @@ void main(){
   gl_Position = vec4(px / (uRes * .5), 0., 1.);
   gl_PointSize = max(2., size * uPx * 2.6);          // sprite larger than the core so the gaussian tail fits
   vCol = col; vA = a;
-}`
-  );
-  var PARTICLE_FS = (
-    /* glsl */
-    `${HEADER}
+}`,dn=`${j}
 in vec3 vCol; in float vA;
 out vec4 o;
 void main(){
@@ -264,22 +171,14 @@ void main(){
   float k = vA * (exp(-d2 * 5.) * .55 + exp(-d2 * 22.) * .9);
   vec3 col = (vCol + vec3(.4, .35, .3) * exp(-d2 * 22.)) * k;        // white-hot core
   o = vec4(col, k);
-}`
-  );
-  var LOGO_VS = (
-    /* glsl */
-    `${HEADER}
+}`,mn=`${j}
 uniform vec2 uRes, uHalf;
 out vec2 vUv;
 void main(){
   vec2 c = vec2(gl_VertexID & 1, gl_VertexID >> 1);
   vUv = vec2(c.x, 1. - c.y);                           // canvas row 0 is the top
   gl_Position = vec4((c * 2. - 1.) * uHalf / (uRes * .5), 0., 1.);
-}`
-  );
-  var LOGO_FS = (
-    /* glsl */
-    `${HEADER}
+}`,hn=`${j}
 uniform sampler2D uTex;
 uniform vec2 uPad;
 uniform float uTime, uEnergy, uLevel;
@@ -316,405 +215,4 @@ void main(){
   float win = smoothstep(0., .14, min(m.x, m.y));                     // deep mips bleed to the quad edge; fade before it
   vec3 halo = vec3(1., .6, .18) * glow * win * (.3 + .35 * uEnergy + .6 * uLevel) * (1. - a);
   o = vec4(col * a + halo, a);                                        // premultiplied; halo is additive (alpha 0)
-}`
-  );
-
-  // src/orb/renderer.ts
-  var compile = (gl, vs, fs, names) => {
-    const sh = (type, src) => {
-      const s = gl.createShader(type);
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS) && !gl.isContextLost())
-        throw new Error(`orb shader: ${gl.getShaderInfoLog(s)}`);
-      return s;
-    };
-    const p = gl.createProgram();
-    const v = sh(gl.VERTEX_SHADER, vs);
-    const f = sh(gl.FRAGMENT_SHADER, fs);
-    gl.attachShader(p, v);
-    gl.attachShader(p, f);
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS) && !gl.isContextLost())
-      throw new Error(`orb link: ${gl.getProgramInfoLog(p)}`);
-    gl.deleteShader(v);
-    gl.deleteShader(f);
-    return { p, u: Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)])) };
-  };
-  var TEX = 1024;
-  var FULL_R_CSS = 156;
-  var logoTexture = (gl, logo) => {
-    const c = document.createElement("canvas");
-    c.width = c.height = TEX;
-    const ctx = c.getContext("2d");
-    const s = TEX * 0.7 / Math.max(logo.width, logo.height);
-    const w = logo.width * s;
-    const h = logo.height * s;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, TEX, TEX);
-    ctx.translate((TEX - w) / 2, (TEX - h) / 2);
-    ctx.scale(s, s);
-    ctx.fillStyle = "#fff";
-    ctx.fill(new Path2D(logo.d), "evenodd");
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
-    gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return { tex, aspect: logo.width / logo.height, padX: (TEX - w) / 2 / TEX, padY: (TEX - h) / 2 / TEX, fill: w / TEX };
-  };
-  var COMMON = ["uRes", "uR", "uPx", "uTime", "uEnergy", "uLevel"];
-  var createOrbRenderer = (opts) => {
-    const { canvas: canvas2, logo, transparent = false, maxDpr = 2, particleCount = 9e3, radius = 0.4 } = opts;
-    const gl = canvas2.getContext("webgl2", {
-      alpha: transparent,
-      premultipliedAlpha: true,
-      antialias: false,
-      // everything is analytically anti-aliased in-shader; MSAA would only cost bandwidth
-      depth: false,
-      stencil: false,
-      powerPreference: "default"
-      // background effect: don't force the discrete GPU / drain battery
-    });
-    if (!gl) return null;
-    let res = null;
-    const init = () => {
-      const vao = gl.createVertexArray();
-      res = {
-        bg: compile(gl, FULLSCREEN_VS, BACKGROUND_FS, [...COMMON, "uFlowPhase", "uTransparent"]),
-        orb: compile(gl, ORB_VS, ORB_FS, [
-          ...COMMON,
-          "uHalf",
-          "uRot",
-          "uTurb",
-          "uScan",
-          "uScanPhase",
-          "uArc",
-          "uProgress"
-        ]),
-        part: compile(gl, PARTICLE_VS, PARTICLE_FS, [...COMMON, "uRot", "uFlowPhase"]),
-        logo: compile(gl, LOGO_VS, LOGO_FS, ["uRes", "uHalf", "uTex", "uPad", "uTime", "uEnergy", "uLevel"]),
-        vao,
-        logoTex: logo ? logoTexture(gl, logo) : null
-      };
-    };
-    let target = STATE_TARGETS.idle;
-    let params = { ...STATE_TARGETS.idle };
-    let t = 0, rot = 0, flowPhase = 0, scanPhase = 0, env = 0, prog = 0, progTarget = 0;
-    let quality = initialQuality();
-    let appliedScale = -1;
-    let levelFn = null;
-    let running = true, isStatic = false, disposed = false, lost = false, losses2 = 0;
-    let raf = 0, last = 0;
-    let pxPerCss = 1;
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, maxDpr) * quality.scale;
-      const w = Math.max(1, Math.round(canvas2.clientWidth * dpr));
-      const h = Math.max(1, Math.round(canvas2.clientHeight * dpr));
-      if (canvas2.width !== w || canvas2.height !== h) {
-        canvas2.width = w;
-        canvas2.height = h;
-      }
-      pxPerCss = dpr;
-      appliedScale = quality.scale;
-      if (isStatic) draw();
-    };
-    const level = () => env * params.reactivity;
-    const step = (dt) => {
-      params = smoothParams(params, target, dt, 0.35);
-      let raw = 0;
-      try {
-        raw = levelFn ? levelFn() : 0;
-      } catch {
-        raw = 0;
-      }
-      env = envelope(env, raw, dt);
-      const lv = level();
-      t += dt;
-      rot += params.spin * dt * (1 + lv * 0.6);
-      flowPhase += params.flow * dt * (0.16 + lv * 0.3);
-      scanPhase += dt * 0.6;
-      prog = smooth(prog, progTarget, dt, 0.15);
-    };
-    const draw = () => {
-      if (!res || lost) return;
-      const { bg, orb: orb2, part, logo: lp, vao, logoTex } = res;
-      const W = canvas2.width, H = canvas2.height;
-      const lv = level();
-      const breathe = 1 + 0.012 * Math.sin(t * 1.1) * (1 - lv);
-      const R = Math.min(W, H) * radius * breathe * (1 + 0.045 * lv);
-      gl.viewport(0, 0, W, H);
-      gl.bindVertexArray(vao);
-      gl.clearColor(0, 0, 0, transparent ? 0 : 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      const common = (u) => {
-        gl.uniform2f(u.uRes, W, H);
-        gl.uniform1f(u.uR, R);
-        gl.uniform1f(u.uPx, pxPerCss);
-        gl.uniform1f(u.uTime, t);
-        gl.uniform1f(u.uEnergy, params.energy);
-        gl.uniform1f(u.uLevel, lv);
-      };
-      gl.disable(gl.BLEND);
-      gl.useProgram(bg.p);
-      common(bg.u);
-      gl.uniform1f(bg.u.uFlowPhase, flowPhase);
-      gl.uniform1f(bg.u.uTransparent, transparent ? 1 : 0);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.ONE, gl.ONE);
-      gl.useProgram(orb2.p);
-      common(orb2.u);
-      gl.uniform1f(orb2.u.uHalf, R * 1.45);
-      gl.uniform1f(orb2.u.uRot, rot);
-      gl.uniform1f(orb2.u.uTurb, params.turbulence);
-      gl.uniform1f(orb2.u.uScan, params.scan);
-      gl.uniform1f(orb2.u.uScanPhase, scanPhase);
-      gl.uniform1f(orb2.u.uArc, params.arc);
-      gl.uniform1f(orb2.u.uProgress, prog);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      gl.useProgram(part.p);
-      common(part.u);
-      gl.uniform1f(part.u.uRot, rot);
-      gl.uniform1f(part.u.uFlowPhase, flowPhase);
-      const rCss = R / pxPerCss;
-      const count = Math.round(Math.min(particleCount, Math.max(300, particleCount * (rCss / FULL_R_CSS) ** 2)));
-      gl.drawArrays(gl.POINTS, 0, count);
-      if (logoTex) {
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-        gl.useProgram(lp.p);
-        const symW = R * 0.92;
-        const quadW = symW / logoTex.fill;
-        gl.uniform2f(lp.u.uRes, W, H);
-        gl.uniform2f(lp.u.uHalf, quadW / 2, quadW / 2);
-        gl.uniform2f(lp.u.uPad, logoTex.padX, logoTex.padY);
-        gl.uniform1f(lp.u.uTime, t);
-        gl.uniform1f(lp.u.uEnergy, params.energy);
-        gl.uniform1f(lp.u.uLevel, lv);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, logoTex.tex);
-        gl.uniform1i(lp.u.uTex, 0);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      }
-    };
-    const frame = (now) => {
-      raf = 0;
-      if (disposed || lost || !running || isStatic) return;
-      const dtMs = last ? now - last : 1e3 / 60;
-      last = now;
-      quality = nextQuality(quality, dtMs);
-      if (quality.scale !== appliedScale) resize();
-      step(clampDt(dtMs / 1e3));
-      draw();
-      raf = requestAnimationFrame(frame);
-    };
-    const kick = () => {
-      if (!raf && running && !isStatic && !disposed && !lost) {
-        last = 0;
-        raf = requestAnimationFrame(frame);
-      }
-    };
-    const drawStatic = () => {
-      params = { ...target };
-      env = 0;
-      prog = progTarget;
-      t = 2.5;
-      rot = 0.9;
-      flowPhase = 0.3;
-      scanPhase = Math.PI / 2 - 0.9;
-      draw();
-    };
-    const onLost = (e) => {
-      e.preventDefault();
-      lost = true;
-      losses2 += 1;
-      cancelAnimationFrame(raf);
-      raf = 0;
-      if (opts.onContextLost?.(losses2) === false) disposed = true;
-    };
-    const onRestored = () => {
-      if (disposed) return;
-      lost = false;
-      init();
-      resize();
-      if (isStatic) drawStatic();
-      else kick();
-    };
-    canvas2.addEventListener("webglcontextlost", onLost);
-    canvas2.addEventListener("webglcontextrestored", onRestored);
-    init();
-    resize();
-    kick();
-    return {
-      setState: (s) => {
-        target = STATE_TARGETS[s];
-        if (isStatic) drawStatic();
-      },
-      setProgress: (p) => {
-        progTarget = Math.min(1, Math.max(0, Number.isFinite(p) ? p : 0));
-        if (isStatic) drawStatic();
-      },
-      setLevelSource: (fn) => {
-        levelFn = fn;
-      },
-      setRunning: (r) => {
-        running = r;
-        if (r) kick();
-        else {
-          cancelAnimationFrame(raf);
-          raf = 0;
-        }
-      },
-      setStatic: (s) => {
-        isStatic = s;
-        if (s) {
-          cancelAnimationFrame(raf);
-          raf = 0;
-          drawStatic();
-        } else kick();
-      },
-      resize,
-      dispose: () => {
-        disposed = true;
-        cancelAnimationFrame(raf);
-        canvas2.removeEventListener("webglcontextlost", onLost);
-        canvas2.removeEventListener("webglcontextrestored", onRestored);
-        if (res && !gl.isContextLost()) {
-          [res.bg, res.orb, res.part, res.logo].forEach((p) => gl.deleteProgram(p.p));
-          gl.deleteVertexArray(res.vao);
-          if (res.logoTex) gl.deleteTexture(res.logoTex.tex);
-        }
-        res = null;
-        gl.getExtension("WEBGL_lose_context")?.loseContext();
-      }
-    };
-  };
-
-  // src/orb/logo.ts
-  var XYP3RN_SYMBOL = {
-    d: "M91 149.5L91 82L251 82L333 0L9 0L9 183.47L246.78 421.25L82 586.03L82 476.97L130 428.97L130 313L0 443L0 784L362.75 421.25L250.23 308.73L405.5 153.47L560.77 308.73L448.25 421.25L811 784L811 443L681 313L681 428.97L729 476.97L729 586.03L564.22 421.25L802 183.47L802 0L478 0L560 82L720 82L720 149.5L618.75 250.75L405.5 37.5L192.25 250.75Z",
-    width: 811,
-    height: 784
-  };
-
-  // .harness/demo-vanilla.ts
-  var stage = document.getElementById("stage");
-  var canvas = document.createElement("canvas");
-  canvas.className = "orb";
-  canvas.setAttribute("aria-hidden", "true");
-  stage.prepend(canvas);
-  var label = document.getElementById("label");
-  var dock = document.getElementById("dock");
-  var states = document.getElementById("states");
-  var mic = document.getElementById("mic");
-  var range = document.getElementById("progress");
-  var state = "idle";
-  var progress = 0.42;
-  var micRead = () => 0;
-  var micStop = () => {
-  };
-  var micOn = false;
-  var fallback = () => {
-    canvas.remove();
-    const img = document.createElement("img");
-    img.className = "poster";
-    img.src = "/icon.svg";
-    img.alt = "XYP3RN";
-    stage.prepend(img);
-  };
-  var losses = 0;
-  var orb = (() => {
-    try {
-      return createOrbRenderer({
-        canvas,
-        logo: XYP3RN_SYMBOL,
-        onContextLost: () => {
-          if (++losses < 3) return true;
-          fallback();
-          return false;
-        }
-      });
-    } catch (e) {
-      console.error(e);
-      return null;
-    }
-  })();
-  if (!orb) fallback();
-  var render = () => {
-    label.textContent = state.toUpperCase() + (state === "rendering" ? ` ${Math.round(progress * 100)}%` : "");
-    for (const b of states.querySelectorAll("button")) {
-      const on = b.dataset.state === state;
-      b.classList.toggle("on", on);
-      b.setAttribute("aria-checked", String(on));
-    }
-    range.hidden = state !== "rendering";
-    mic.hidden = state !== "listening" && state !== "speaking";
-    orb?.setState(state);
-    orb?.setProgress(progress);
-  };
-  for (const s of ORB_STATES) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.setAttribute("role", "radio");
-    b.dataset.state = s;
-    b.textContent = s.toUpperCase();
-    b.onclick = () => {
-      state = s;
-      render();
-    };
-    states.append(b);
-  }
-  range.value = String(progress);
-  range.oninput = () => {
-    progress = +range.value;
-    render();
-  };
-  mic.onclick = async () => {
-    if (micOn) {
-      micStop();
-      micRead = () => 0;
-      micOn = false;
-      mic.classList.remove("live");
-      mic.textContent = "ENABLE MIC FOR AUDIO REACTION";
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-      const ctx = new AudioContext();
-      const an = ctx.createAnalyser();
-      an.fftSize = 1024;
-      ctx.createMediaStreamSource(stream).connect(an);
-      const buf = new Float32Array(an.fftSize);
-      micRead = () => {
-        an.getFloatTimeDomainData(buf);
-        let s = 0;
-        for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
-        return Math.min(1, Math.sqrt(Math.sqrt(s / buf.length)) * 1.6);
-      };
-      micStop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        void ctx.close();
-      };
-      micOn = true;
-      mic.classList.add("live");
-      mic.textContent = "MIC LIVE // TAP TO STOP";
-    } catch (e) {
-      mic.textContent = e instanceof DOMException && e.name === "NotAllowedError" ? "MIC BLOCKED" : "NO MIC";
-    }
-  };
-  if (orb) {
-    orb.setLevelSource(() => micRead());
-    new ResizeObserver(() => orb.resize()).observe(canvas);
-    const sync = () => orb.setRunning(!document.hidden);
-    document.addEventListener("visibilitychange", sync);
-    const rm = matchMedia("(prefers-reduced-motion: reduce)");
-    orb.setStatic(rm.matches);
-    rm.addEventListener("change", () => orb.setStatic(rm.matches));
-  }
-  dock.hidden = false;
-  render();
-})();
+}`;var Me=(e,t,n,r)=>{let o=(u,c)=>{let _=e.createShader(u);if(e.shaderSource(_,c),e.compileShader(_),!e.getShaderParameter(_,e.COMPILE_STATUS)&&!e.isContextLost())throw new Error(`orb shader: ${e.getShaderInfoLog(_)}`);return _},s=e.createProgram(),l=o(e.VERTEX_SHADER,t),a=o(e.FRAGMENT_SHADER,n);if(e.attachShader(s,l),e.attachShader(s,a),e.linkProgram(s),!e.getProgramParameter(s,e.LINK_STATUS)&&!e.isContextLost())throw new Error(`orb link: ${e.getProgramInfoLog(s)}`);return e.deleteShader(l),e.deleteShader(a),{p:s,u:Object.fromEntries(r.map(u=>[u,e.getUniformLocation(s,u)]))}},W=1024,mr=156,hr=(e,t)=>{let n=document.createElement("canvas");n.width=n.height=W;let r=n.getContext("2d"),o=W*.7/Math.max(t.width,t.height),s=t.width*o,l=t.height*o;r.fillStyle="#000",r.fillRect(0,0,W,W),r.translate((W-s)/2,(W-l)/2),r.scale(o,o),r.fillStyle="#fff",r.fill(new Path2D(t.d),"evenodd");let a=e.createTexture();return e.bindTexture(e.TEXTURE_2D,a),e.pixelStorei(e.UNPACK_PREMULTIPLY_ALPHA_WEBGL,!1),e.texImage2D(e.TEXTURE_2D,0,e.RGBA,e.RGBA,e.UNSIGNED_BYTE,n),e.generateMipmap(e.TEXTURE_2D),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MIN_FILTER,e.LINEAR_MIPMAP_LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MAG_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_S,e.CLAMP_TO_EDGE),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_T,e.CLAMP_TO_EDGE),{tex:a,aspect:t.width/t.height,padX:(W-s)/2/W,padY:(W-l)/2/W,fill:s/W}},tt=["uRes","uR","uPx","uTime","uEnergy","uLevel"],nt=e=>{let{canvas:t,logo:n,transparent:r=!1,maxDpr:o=2,particleCount:s=9e3,radius:l=.4}=e,a=t.getContext("webgl2",{alpha:r,premultipliedAlpha:!0,antialias:!1,depth:!1,stencil:!1,powerPreference:"default"});if(!a)return null;let u=null,c=()=>{let g=a.createVertexArray();u={bg:Me(a,cn,un,[...tt,"uFlowPhase","uTransparent"]),orb:Me(a,pn,fn,[...tt,"uHalf","uRot","uTurb","uScan","uScanPhase","uArc","uProgress"]),part:Me(a,_n,dn,[...tt,"uRot","uFlowPhase"]),logo:Me(a,mn,hn,["uRes","uHalf","uTex","uPad","uTime","uEnergy","uLevel"]),vao:g,logoTex:n?hr(a,n):null}},_=Ie.idle,i={...Ie.idle},m=0,d=0,h=0,x=0,S=0,y=0,b=0,P=sn(),f=-1,C=null,V=!0,F=!1,I=!1,B=!1,A=0,T=0,w=0,E=1,M=()=>{let g=Math.min(window.devicePixelRatio||1,o)*P.scale,L=Math.max(1,Math.round(t.clientWidth*g)),G=Math.max(1,Math.round(t.clientHeight*g));(t.width!==L||t.height!==G)&&(t.width=L,t.height=G),E=g,f=P.scale,F&&ne()},te=()=>S*i.reactivity,X=g=>{i=nn(i,_,g,.35);let L=0;try{L=C?C():0}catch{L=0}S=rn(S,L,g);let G=te();m+=g,d+=i.spin*g*(1+G*.6),h+=i.flow*g*(.16+G*.3),x+=g*.6,y=q(y,b,g,.15)},ne=()=>{if(!u||B)return;let{bg:g,orb:L,part:G,logo:Y,vao:An,logoTex:ce}=u,ge=t.width,ye=t.height,be=te(),On=1+.012*Math.sin(m*1.1)*(1-be),xe=Math.min(ge,ye)*l*On*(1+.045*be);a.viewport(0,0,ge,ye),a.bindVertexArray(An),a.clearColor(0,0,0,r?0:1),a.clear(a.COLOR_BUFFER_BIT);let Ve=J=>{a.uniform2f(J.uRes,ge,ye),a.uniform1f(J.uR,xe),a.uniform1f(J.uPx,E),a.uniform1f(J.uTime,m),a.uniform1f(J.uEnergy,i.energy),a.uniform1f(J.uLevel,be)};a.disable(a.BLEND),a.useProgram(g.p),Ve(g.u),a.uniform1f(g.u.uFlowPhase,h),a.uniform1f(g.u.uTransparent,r?1:0),a.drawArrays(a.TRIANGLES,0,3),a.enable(a.BLEND),a.blendFunc(a.ONE,a.ONE),a.useProgram(L.p),Ve(L.u),a.uniform1f(L.u.uHalf,xe*1.45),a.uniform1f(L.u.uRot,d),a.uniform1f(L.u.uTurb,i.turbulence),a.uniform1f(L.u.uScan,i.scan),a.uniform1f(L.u.uScanPhase,x),a.uniform1f(L.u.uArc,i.arc),a.uniform1f(L.u.uProgress,y),a.drawArrays(a.TRIANGLE_STRIP,0,4),a.useProgram(G.p),Ve(G.u),a.uniform1f(G.u.uRot,d),a.uniform1f(G.u.uFlowPhase,h);let Nn=xe/E,In=Math.round(Math.min(s,Math.max(300,s*(Nn/mr)**2)));if(a.drawArrays(a.POINTS,0,In),ce){a.blendFunc(a.ONE,a.ONE_MINUS_SRC_ALPHA),a.useProgram(Y.p);let ut=xe*.92/ce.fill;a.uniform2f(Y.u.uRes,ge,ye),a.uniform2f(Y.u.uHalf,ut/2,ut/2),a.uniform2f(Y.u.uPad,ce.padX,ce.padY),a.uniform1f(Y.u.uTime,m),a.uniform1f(Y.u.uEnergy,i.energy),a.uniform1f(Y.u.uLevel,be),a.activeTexture(a.TEXTURE0),a.bindTexture(a.TEXTURE_2D,ce.tex),a.uniform1i(Y.u.uTex,0),a.drawArrays(a.TRIANGLE_STRIP,0,4)}},O=g=>{if(T=0,I||B||!V||F)return;let L=w?g-w:1e3/60;w=g,P=an(P,L),P.scale!==f&&M(),X(on(L/1e3)),ne(),T=requestAnimationFrame(O)},re=()=>{!T&&V&&!F&&!I&&!B&&(w=0,T=requestAnimationFrame(O))},ve=()=>{i={..._},S=0,y=b,m=2.5,d=.9,h=.3,x=Math.PI/2-.9,ne()},lt=g=>{g.preventDefault(),B=!0,A+=1,cancelAnimationFrame(T),T=0,e.onContextLost?.(A)===!1&&(I=!0)},ct=()=>{I||(B=!1,c(),M(),F?ve():re())};return t.addEventListener("webglcontextlost",lt),t.addEventListener("webglcontextrestored",ct),c(),M(),re(),{setState:g=>{_=Ie[g],F&&ve()},setProgress:g=>{b=Math.min(1,Math.max(0,Number.isFinite(g)?g:0)),F&&ve()},setLevelSource:g=>{C=g},setRunning:g=>{V=g,g?re():(cancelAnimationFrame(T),T=0)},setStatic:g=>{F=g,g?(cancelAnimationFrame(T),T=0,ve()):re()},resize:M,dispose:()=>{I=!0,cancelAnimationFrame(T),t.removeEventListener("webglcontextlost",lt),t.removeEventListener("webglcontextrestored",ct),u&&!a.isContextLost()&&([u.bg,u.orb,u.part,u.logo].forEach(g=>a.deleteProgram(g.p)),a.deleteVertexArray(u.vao),u.logoTex&&a.deleteTexture(u.logoTex.tex)),u=null,a.getExtension("WEBGL_lose_context")?.loseContext()}}};var vr=0,oo=Array.isArray;function p(e,t,n,r,o,s){t||(t={});var l,a,u=t;"ref"in t&&(l=t.ref,delete t.ref);var c={type:e,props:u,key:n,ref:l,__k:null,__:null,__b:0,__e:null,__d:void 0,__c:null,constructor:void 0,__v:--vr,__i:-1,__u:0,__source:o,__self:s};if(typeof e=="function"&&(l=e.defaultProps))for(a in l)u[a]===void 0&&(u[a]=l[a]);return v.vnode&&v.vnode(c),c}var gr=()=>jt(e=>{let t=window.matchMedia("(prefers-reduced-motion: reduce)");return t.addEventListener("change",e),()=>t.removeEventListener("change",e)},()=>window.matchMedia("(prefers-reduced-motion: reduce)").matches,()=>!1),yr=3;function rt({state:e,getLevel:t,progress:n=0,logo:r=et,transparent:o=!1,className:s="relative h-full w-full",fallback:l,children:a}){let u=D(null),c=D(null),[_,i]=N(!1),m=gr(),d=D(t);return d.current=t,H(()=>{let h=u.current;if(!h)return;let x=null;try{x=nt({canvas:h,logo:r,transparent:o,onContextLost:f=>f<yr?!0:(i(!0),!1)})}catch(f){console.error(f)}if(!x){i(!0);return}c.current=x,x.setLevelSource(()=>d.current?.()??0);let S=new ResizeObserver(()=>x.resize());S.observe(h);let y=!0,b=()=>x.setRunning(y&&!document.hidden),P=new IntersectionObserver(([f])=>{y=f.isIntersecting,b()});return P.observe(h),document.addEventListener("visibilitychange",b),()=>{S.disconnect(),P.disconnect(),document.removeEventListener("visibilitychange",b),x.dispose(),c.current=null}},[r,o]),H(()=>c.current?.setState(e),[e,_]),H(()=>c.current?.setProgress(n),[n,_]),H(()=>c.current?.setStatic(m),[m,_]),p("div",{className:`overflow-hidden ${o?"":"bg-black"} ${s}`,children:[_?l??null:p("canvas",{ref:u,className:"absolute inset-0 block h-full w-full","aria-hidden":"true"}),a&&p("div",{className:"relative z-10 h-full w-full",children:a})]})}var vn=()=>typeof window>"u"?void 0:window.SpeechRecognition??window.webkitSpeechRecognition,ot=()=>!!vn(),br={"not-allowed":"Microphone blocked. Allow it for this site in the browser settings.","service-not-allowed":"Speech recognition is disabled in this browser.","audio-capture":"No microphone found.",network:"Speech recognition needs an internet connection in this browser.","language-not-supported":"This speech language isn't supported here. Change it in Settings."},gn=e=>{let t=vn();if(!t)return e.onError("Voice input isn't supported in this browser. Type instead, or use Chrome / Safari."),e.onFinal(""),{stop(){},abort(){},level:()=>0};let n=new t;n.lang=e.lang||navigator.language,n.interimResults=!0,n.continuous=!1,n.maxAlternatives=1;let r="",o="",s=!1,l=0,a=!1,u=()=>{a||(a=!0,e.onFinal((r||o).trim()))};n.onspeechstart=()=>{s=!0,l=performance.now()},n.onresult=c=>{let _="",i="";for(let m=0;m<c.results.length;m++){let d=c.results[m];d.isFinal?_+=d[0].transcript:i+=d[0].transcript}r=_,o=_+i,s=!0,l=performance.now(),e.onInterim(o)},n.onerror=c=>{c.error!=="aborted"&&c.error!=="no-speech"&&e.onError(br[c.error]??`Speech recognition error: ${c.error}`)},n.onend=u;try{n.start()}catch(c){e.onError(`Couldn't start the microphone: ${c.message}`),u()}return{stop:()=>n.stop(),abort:()=>{a=!0,n.abort()},level:()=>s?.25+.6*Math.max(0,1-(performance.now()-l)/260):.06}};var xr=e=>e.replace(/\[([^\]]+)\]\([^)]*\)/g,"$1").replace(/[*_`~]+/g,"").replace(/^\s*(#{1,6}|[-*+]|\d+\.)\s+/gm,"").replace(/#{1,6}\s+/g,"").replace(/\s+/g," ").trim(),yn=e=>{let t="",n=o=>{let s=xr(o);s&&e(s)},r=()=>{for(;;){let o=/([.!?]+)(?=\s)|\n/.exec(t);if(o){let s=o.index+o[0].length;n(t.slice(0,s)),t=t.slice(s);continue}if(t.length>220){let s=Math.max(t.lastIndexOf(", ",220),t.lastIndexOf(" ",220)),l=s>220/3?s+1:220;n(t.slice(0,l)),t=t.slice(l);continue}return}};return{push(o){t+=o,r()},flush(){r(),n(t),t=""}}};var Sr=null,bn=()=>Sr??(Sr=new AudioContext),st=()=>{try{"speechSynthesis"in window&&window.speechSynthesis.speak(new SpeechSynthesisUtterance("")),bn().resume()}catch{}},at=()=>"speechSynthesis"in window?window.speechSynthesis.getVoices():[],xn=e=>e.engine==="openai"?wr(e):Er(e),Er=e=>{let t=window.speechSynthesis,n=0,r=!1,o=!1,s=0,l=()=>{let u=t.getVoices();return u.find(c=>c.name===e.browserVoice)??(e.lang?u.find(c=>c.lang.startsWith(e.lang.slice(0,2))):void 0)},a=()=>{!o&&r&&n===0&&e.onDone()};return{say(u){if(o)return;let c=new SpeechSynthesisUtterance(u),_=l();_&&(c.voice=_),e.lang&&(c.lang=e.lang),c.onboundary=()=>s=performance.now(),c.onstart=()=>s=performance.now(),c.onend=c.onerror=()=>{n-=1,a()},n+=1,t.speak(c)},end(){r=!0,a()},stop(){o=!0,n=0,t.cancel()},active:()=>!o&&n>0,level:()=>n>0&&t.speaking?Math.max(.35,.85*(1-(performance.now()-s)/220)):0}},wr=e=>{let t=bn(),n=new Audio;n.crossOrigin="anonymous";let r=t.createAnalyser();r.fftSize=512,t.createMediaElementSource(n).connect(r),r.connect(t.destination);let o=new Float32Array(r.fftSize),s=[],l=[],a=!1,u=!1,c=!1,_=m=>{let d=new AbortController;return l.push(d),fetch("https://api.openai.com/v1/audio/speech",{method:"POST",headers:{"content-type":"application/json",Authorization:`Bearer ${e.openai.key}`},body:JSON.stringify({model:e.openai.model,voice:e.openai.voice,input:m,response_format:"mp3"}),signal:d.signal}).then(async h=>{if(!h.ok)throw{status:h.status,body:await h.text().catch(()=>"")};return h.blob()}).catch(h=>(c||h?.name==="AbortError"||e.onError(ae({status:h?.status??0,body:h?.body??"",provider:"OpenAI voice"})),null))},i=async()=>{if(a||c)return;let m=s.shift();if(!m){u&&e.onDone();return}a=!0;let d=await m;if(!c){if(d){let h=URL.createObjectURL(d);n.src=h,await new Promise(x=>{n.onended=n.onerror=()=>x(),n.play().catch(()=>x())}),URL.revokeObjectURL(h)}a=!1,i()}};return{say(m){c||(s.push(_(m)),i())},end(){u=!0,!a&&s.length===0&&e.onDone()},stop(){c=!0,l.forEach(m=>m.abort()),s.length=0,n.pause()},active:()=>!c&&(a||s.length>0),level:()=>{if(!a)return 0;r.getFloatTimeDomainData(o);let m=0;for(let d=0;d<o.length;d++)m+=o[d]*o[d];return Math.min(1,Math.sqrt(Math.sqrt(m/o.length))*1.8)}}};var it={phase:"idle",messages:[],error:null},Ue=e=>e==="thinking"||e==="answering",Sn=(e,t)=>{let n=t.trim();return n?{phase:"thinking",error:null,messages:[...e.messages,{role:"user",content:n},{role:"assistant",content:""}]}:{...e,phase:"idle"}},De=e=>e.at(-1)?.role==="assistant"&&!e.at(-1).content?e.slice(0,-1):e,En=(e,t)=>{switch(t.type){case"LISTEN_START":return Ue(e.phase)?e:{...e,phase:"listening",error:null};case"LISTEN_END":return e.phase==="listening"?Sn(e,t.text):e;case"SEND":return Ue(e.phase)?e:Sn(e,t.text);case"TOKEN":{if(!Ue(e.phase))return e;let n=e.messages.at(-1);return{...e,phase:"answering",messages:[...e.messages.slice(0,-1),{...n,content:n.content+t.text}]}}case"REPLY_DONE":return Ue(e.phase)?{...e,phase:t.speaking?"speaking":"idle",messages:De(e.messages)}:e;case"SPEECH_DONE":return e.phase==="speaking"?{...e,phase:"idle"}:e;case"FAIL":return{phase:"error",error:t.message,messages:De(e.messages)};case"CANCEL":return{...e,phase:"idle",messages:De(e.messages)};case"RESET":return it}},wn=e=>e==="answering"?"speaking":e==="error"?"idle":e,Rn=(e,t)=>{let n=De(e).slice(-t);for(;n.length&&n[0].role!=="user";)n=n.slice(1);return n};var Q={claude:{label:"Claude",kind:"anthropic",baseUrl:"https://api.anthropic.com",keyHint:"sk-ant-... from console.anthropic.com"},openai:{label:"OpenAI",kind:"openai",baseUrl:"https://api.openai.com/v1",keyHint:"sk-... from platform.openai.com"},groq:{label:"Groq",kind:"openai",baseUrl:"https://api.groq.com/openai/v1",keyHint:"gsk_... from console.groq.com"},openrouter:{label:"OpenRouter",kind:"openai",baseUrl:"https://openrouter.ai/api/v1",keyHint:"sk-or-... from openrouter.ai/keys"},gemini:{label:"Gemini",kind:"gemini",baseUrl:"https://generativelanguage.googleapis.com",keyHint:"AIza... from aistudio.google.com"},custom:{label:"Custom / AgentRouter",kind:"openai",baseUrl:"",keyHint:"key for your OpenAI-compatible endpoint"}},me=Object.keys(Q),de={key:"",model:""},ie={active:"claude",providers:{claude:{key:"",model:"claude-sonnet-5-5"},openai:de,groq:de,openrouter:de,gemini:de,custom:de},customBaseUrl:"",customLabel:"AgentRouter",system:"You are XYP3RN's voice assistant. Replies are spoken aloud: answer in short, direct sentences, no markdown, no lists unless asked.",speak:!0,ttsEngine:"browser",browserVoice:"",openaiVoice:"onyx",openaiTtsModel:"gpt-4o-mini-tts",lang:""},kn="xyp3rn-orb:settings",Fe=e=>{try{let t=e.getItem(kn);if(!t)return ie;let n=JSON.parse(t),r={...ie.providers};for(let o of me)r[o]={...ie.providers[o],...n.providers?.[o]??{}};return{...ie,...n,providers:r,active:me.includes(n.active)?n.active:ie.active}}catch{return ie}},Pn=(e,t)=>{try{e.setItem(kn,JSON.stringify(t))}catch{}},Tn=e=>({...e,providers:Object.fromEntries(me.map(t=>[t,{...e.providers[t],key:""}]))}),le=(e,t)=>t==="custom"?e.customBaseUrl.trim():Q[t].baseUrl,ee=(e,t)=>t==="custom"?e.customLabel.trim()||"Custom":Q[t].label,he=e=>{let t=e.providers[e.active];return!!(t.key.trim()&&t.model.trim()&&le(e,e.active))};var Rr=["en-US","en-GB","bg-BG","de-DE","es-ES","fr-FR","it-IT","ru-RU","tr-TR","el-GR"],kr=["alloy","ash","ballad","coral","echo","fable","nova","onyx","sage","shimmer","verse"];function Ln({settings:e,onChange:t,onClose:n,notice:r}){let o=e.active,s=e.providers[o],[l,a]=N(!1),[u,c]=N({}),[_,i]=N(!1),[m,d]=N(null),[h,x]=N(at());H(()=>{if(!("speechSynthesis"in window))return;let f=()=>x(at());return window.speechSynthesis.addEventListener("voiceschanged",f),()=>window.speechSynthesis.removeEventListener("voiceschanged",f)},[]);let S=f=>t({...e,providers:{...e.providers,[o]:{...s,...f}}}),y=async()=>{i(!0),d(null);try{let f=await tn({kind:Q[o].kind,baseUrl:le(e,o),key:s.key.trim()});c(C=>({...C,[o]:f})),!s.model&&f.length&&S({model:f[0]}),f.length||d("No models returned. Type a model id instead.")}catch(f){let C=f instanceof z?f:new z(0,String(f));d(ae({status:C.status,body:C.body,provider:ee(e,o)}))}finally{i(!1)}},b=!!(s.key.trim()&&le(e,o)),P=`models-${o}`;return p("section",{className:"sheet",role:"dialog","aria-modal":"true","aria-label":"Settings",children:[p("header",{className:"sheet-head",children:[p("h2",{children:"SETTINGS"}),p("button",{type:"button",className:"ghost",onClick:n,children:"DONE"})]}),r&&p("p",{className:"notice",children:r}),p("fieldset",{children:[p("legend",{children:"PROVIDER"}),p("div",{className:"providers",role:"radiogroup",children:me.map(f=>p("button",{type:"button",role:"radio","aria-checked":f===o,className:f===o?"on":"",onClick:()=>{a(!1),d(null),t({...e,active:f})},children:[ee(e,f).toUpperCase(),e.providers[f].key?p("span",{className:"dot","aria-label":"key saved"}):null]},f))}),o==="custom"&&p(U,{children:[p("label",{children:["NAME",p("input",{value:e.customLabel,onChange:f=>t({...e,customLabel:f.target.value}),placeholder:"AgentRouter"})]}),p("label",{children:["BASE URL (OPENAI-COMPATIBLE)",p("input",{value:e.customBaseUrl,onChange:f=>t({...e,customBaseUrl:f.target.value}),placeholder:"https://.../v1",inputMode:"url",autoCapitalize:"off",spellCheck:!1})]})]}),p("label",{children:["API KEY",p("span",{className:"row",children:[p("input",{type:l?"text":"password",value:s.key,onChange:f=>S({key:f.target.value}),placeholder:Q[o].keyHint,autoComplete:"off",autoCapitalize:"off",spellCheck:!1}),p("button",{type:"button",className:"ghost",onClick:()=>a(!l),"aria-pressed":l,children:l?"HIDE":"SHOW"})]})]}),p("label",{children:["MODEL",p("span",{className:"row",children:[p("input",{value:s.model,onChange:f=>S({model:f.target.value}),list:P,placeholder:"load or type a model id",autoCapitalize:"off",spellCheck:!1}),p("button",{type:"button",className:"ghost",disabled:!b||_,onClick:y,children:_?"...":"LOAD"})]}),p("datalist",{id:P,children:(u[o]??[]).map(f=>p("option",{value:f},f))})]}),m&&p("p",{className:"err",children:m}),u[o]&&p("p",{className:"hint",children:[u[o].length," models available. Tap the field to pick."]})]}),p("fieldset",{children:[p("legend",{children:"BEHAVIOUR"}),p("label",{children:["SYSTEM PROMPT",p("textarea",{rows:4,value:e.system,onChange:f=>t({...e,system:f.target.value})})]})]}),p("fieldset",{children:[p("legend",{children:"VOICE"}),p("label",{className:"check",children:[p("input",{type:"checkbox",checked:e.speak,onChange:f=>t({...e,speak:f.target.checked})}),"SPEAK REPLIES"]}),p("label",{children:["SPEECH LANGUAGE (MIC + VOICE)",p("input",{value:e.lang,onChange:f=>t({...e,lang:f.target.value}),list:"langs",placeholder:"auto (browser language)"}),p("datalist",{id:"langs",children:Rr.map(f=>p("option",{value:f},f))})]}),p("label",{children:["VOICE ENGINE",p("select",{value:e.ttsEngine,onChange:f=>t({...e,ttsEngine:f.target.value}),children:[p("option",{value:"browser",children:"Browser (free)"}),p("option",{value:"openai",disabled:!e.providers.openai.key,children:["OpenAI voices ",e.providers.openai.key?"":"(add an OpenAI key)"]})]})]}),e.ttsEngine==="browser"?p("label",{children:["BROWSER VOICE",p("select",{value:e.browserVoice,onChange:f=>t({...e,browserVoice:f.target.value}),children:[p("option",{value:"",children:"Default for language"}),h.filter(f=>!e.lang||f.lang.startsWith(e.lang.slice(0,2))).map(f=>p("option",{value:f.name,children:[f.name," (",f.lang,")"]},f.name))]})]}):p(U,{children:[p("label",{children:["OPENAI VOICE",p("input",{value:e.openaiVoice,onChange:f=>t({...e,openaiVoice:f.target.value}),list:"oa-voices"}),p("datalist",{id:"oa-voices",children:kr.map(f=>p("option",{value:f},f))})]}),p("label",{children:["OPENAI VOICE MODEL",p("input",{value:e.openaiTtsModel,onChange:f=>t({...e,openaiTtsModel:f.target.value}),spellCheck:!1})]})]})]}),p("fieldset",{children:[p("legend",{children:"PRIVACY"}),p("p",{className:"hint",children:"Keys are stored only in this browser on this device and sent only to the provider you call. Anyone with access to this browser profile can read them."}),p("button",{type:"button",className:"danger",onClick:()=>t(Tn(e)),children:"FORGET ALL KEYS"})]})]})}var Pr=20,He=(()=>{try{return window.localStorage}catch{return{getItem:()=>null,setItem:()=>{}}}})(),Tr={idle:"READY",listening:"LISTENING",thinking:"THINKING",answering:"ANSWERING",speaking:"SPEAKING",error:"ERROR"};function Cn(){let[e,t]=N(()=>Fe(He)),[n,r]=Le(En,it),[o,s]=N(()=>({open:!he(Fe(He)),notice:he(Fe(He))?null:"Add an API key and model to start."})),[l,a]=N(""),[u,c]=N(""),_=D(null),i=D(null),m=D(null),d=D(0),h=D(e);h.current=e;let x=D(null),S=w=>{t(w),Pn(He,w)},y=Ce(()=>{let w=_.current?.level()??0,E=i.current?.level()??0,M=Math.max(0,1-(performance.now()-d.current)/200)*.35;return Math.max(w,E,M)},[]),b=()=>{m.current?.abort(),m.current=null,i.current?.stop(),i.current=null,_.current?.abort(),_.current=null},P=Ce(async w=>{let E=h.current,M=E.active,te=new AbortController;m.current=te;let X=E.speak?xn({engine:E.ttsEngine==="openai"&&E.providers.openai.key?"openai":"browser",lang:E.lang,browserVoice:E.browserVoice,openai:{key:E.providers.openai.key.trim(),voice:E.openaiVoice,model:E.openaiTtsModel},onDone:()=>{i.current===X&&(i.current=null),r({type:"SPEECH_DONE"})},onError:O=>r({type:"FAIL",message:O})}):null;i.current=X;let ne=X?yn(O=>X.say(O)):null;try{for await(let O of en({kind:Q[M].kind,baseUrl:le(E,M),key:E.providers[M].key.trim(),model:E.providers[M].model.trim(),system:E.system},w,te.signal))d.current=performance.now(),r({type:"TOKEN",text:O}),ne?.push(O);ne?.flush(),X?.end(),r({type:"REPLY_DONE",speaking:X?.active()??!1})}catch(O){if(O.name==="AbortError")return;X?.stop();let re=O instanceof z?ae({status:O.status,body:O.body,provider:ee(E,M)}):`${ee(E,M)}: ${O.message}`;r({type:"FAIL",message:re})}finally{m.current===te&&(m.current=null)}},[]),f=D(null);H(()=>{n.phase==="thinking"&&f.current!==n.messages&&(f.current=n.messages,P(Rn(n.messages,Pr)))},[n.phase,n.messages,P]),H(()=>{x.current?.scrollTo({top:x.current.scrollHeight})},[n.messages,l]);let C=()=>he(h.current)?!0:(s({open:!0,notice:"Add an API key and model for the selected provider first."}),!1),V=()=>{if(n.phase==="listening")return _.current?.stop();if(n.phase==="thinking"||n.phase==="answering"||n.phase==="speaking")return b(),r({type:"CANCEL"});C()&&(st(),a(""),r({type:"LISTEN_START"}),_.current=gn({lang:h.current.lang,onInterim:a,onFinal:w=>{_.current=null,a(""),r({type:"LISTEN_END",text:w})},onError:w=>r({type:"FAIL",message:w})}))},F=w=>{w.preventDefault();let E=u.trim();!E||!C()||(n.phase==="speaking"&&b(),st(),c(""),r({type:"SEND",text:E}))},I=n.phase==="thinking"||n.phase==="answering"||n.phase==="speaking",B=he(e),A=e.providers[e.active],T=n.messages.slice(-6);return p(rt,{state:wn(n.phase),getLevel:y,className:"stage",fallback:p("img",{className:"poster",src:"/icon.svg",alt:"XYP3RN"}),children:[p("header",{className:"top",children:[p("span",{className:"brand",children:"XYP3RN // ORB"}),p("span",{className:"tools",children:[p("button",{type:"button",className:"chip",onClick:()=>s({open:!0,notice:null}),"aria-label":"Model and settings",children:B?`${ee(e,e.active)} \xB7 ${A.model}`:"SET UP A PROVIDER"}),p("button",{type:"button",className:"ghost sq","aria-label":"New chat",disabled:!n.messages.length,onClick:()=>{b(),r({type:"RESET"})},children:"NEW"})]})]}),p("div",{className:"dock",children:[p("div",{className:"log",ref:x,"aria-live":"polite",children:[T.map((w,E)=>p("p",{className:w.role,children:w.content||(w.role==="assistant"?"...":"")},n.messages.length-T.length+E)),l&&p("p",{className:"user interim",children:l})]}),n.error&&p("p",{className:"err",role:"alert",children:n.error}),p("div",{className:"status",children:Tr[n.phase]}),p("form",{className:"input",onSubmit:F,children:[p("input",{value:u,onChange:w=>c(w.target.value),placeholder:I?"Tap STOP to interrupt":"Type a message","aria-label":"Message",enterKeyHint:"send"}),p("button",{type:"submit",className:"ghost",disabled:!u.trim()||n.phase==="thinking"||n.phase==="answering",children:"SEND"})]}),p("button",{type:"button",className:`mic ${n.phase==="listening"?"live":""}`,onClick:V,disabled:!I&&n.phase!=="listening"&&!ot(),children:n.phase==="listening"?"TAP TO SEND":I?"STOP":ot()?"TAP TO TALK":"VOICE INPUT UNSUPPORTED: TYPE ABOVE"})]}),o.open&&p(Ln,{settings:e,onChange:S,notice:o.notice,onClose:()=>s({open:!1,notice:null})})]})}Qt(document.getElementById("root")).render(p(Cn,{}));})();
